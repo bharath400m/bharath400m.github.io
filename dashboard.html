@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Dashboard</title>
+
+<style>
+body{
+font-family:Arial,sans-serif;
+padding:20px;
+max-width:1000px;
+margin:auto;
+}
+
+.section{
+border:1px solid #ddd;
+padding:20px;
+margin-bottom:20px;
+border-radius:10px;
+}
+
+input,textarea{
+width:100%;
+padding:10px;
+margin:5px 0;
+}
+
+button{
+padding:10px 15px;
+cursor:pointer;
+margin-top:10px;
+}
+
+img{
+max-width:200px;
+margin-top:10px;
+}
+</style>
+
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<h1>Portfolio Admin Dashboard</h1>
+
+<button onclick="logout()">Logout</button>
+
+<div class="section">
+
+<h2>Profile Settings</h2>
+
+<input type="file" id="profileImage">
+
+<button onclick="uploadProfileImage()">
+Upload Profile Image
+</button>
+
+<br><br>
+
+<img id="preview">
+
+<br><br>
+
+<textarea
+id="aboutText"
+rows="6"
+placeholder="About Me">
+</textarea>
+
+<button onclick="saveAbout()">
+Save About Text
+</button>
+
+</div>
+
+<div class="section">
+
+<h2>Skills</h2>
+
+<input
+type="text"
+id="skillName"
+placeholder="Skill Name">
+
+<button onclick="addSkill()">
+Add Skill
+</button>
+
+<ul id="skillList"></ul>
+
+</div>
+
+<script>
+const supabaseUrl = "https://dmlkmqiurqdoxcitosoh.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRtbGttcWl1cnFkb3hjaXRvc29oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwOTM0NzksImV4cCI6MjA5NjY2OTQ3OX0._ayWXPn6gYWOxmoSznBVb_2Mw6QmR-BbD0WKwc9UtWc";
+
+const supabase = window.supabase.createClient(
+  supabaseUrl,
+  supabaseKey
+);
+
+async function checkAuth() {
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    window.location.href = "login.html";
+  }
+}
+
+async function logout() {
+  await supabase.auth.signOut();
+  window.location.href = "login.html";
+}
+
+async function loadSettings() {
+  const { data } = await supabase
+    .from("settings")
+    .select("*")
+    .eq("id", 1)
+    .single();
+
+  if (!data) return;
+
+  document.getElementById("aboutText").value =
+    data.about_text || "";
+
+  if (data.profile_image) {
+    document.getElementById("preview").src =
+      data.profile_image;
+  }
+}
+
+async function saveAbout() {
+  const aboutText =
+    document.getElementById("aboutText").value;
+
+  await supabase
+    .from("settings")
+    .update({
+      about_text: aboutText
+    })
+    .eq("id", 1);
+
+  alert("About Updated");
+}
+
+async function uploadProfileImage() {
+  const file =
+    document.getElementById("profileImage").files[0];
+
+  if (!file) {
+    alert("Select image");
+    return;
+  }
+
+  const fileName =
+    Date.now() + "-" + file.name;
+
+  const { error } =
+    await supabase.storage
+      .from("profile-images")
+      .upload(fileName, file);
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  const { data } =
+    supabase.storage
+      .from("profile-images")
+      .getPublicUrl(fileName);
+
+  const imageUrl =
+    data.publicUrl;
+
+  await supabase
+    .from("settings")
+    .update({
+      profile_image: imageUrl
+    })
+    .eq("id", 1);
+
+  document.getElementById("preview").src =
+    imageUrl;
+
+  alert("Profile Image Updated");
+}
+
+async function loadSkills() {
+  const { data } = await supabase
+    .from("skills")
+    .select("*")
+    .order("id");
+
+  const skillList =
+    document.getElementById("skillList");
+
+  skillList.innerHTML = "";
+
+  if (!data) return;
+
+  data.forEach(skill => {
+    skillList.innerHTML += `
+      <li>
+        ${skill.skill_name}
+        <button onclick="deleteSkill(${skill.id})">
+          Delete
+        </button>
+      </li>
+    `;
+  });
+}
+
+async function addSkill() {
+  const skill =
+    document.getElementById("skillName").value;
+
+  if (!skill) return;
+
+  await supabase
+    .from("skills")
+    .insert([
+      {
+        skill_name: skill
+      }
+    ]);
+
+  document.getElementById("skillName").value = "";
+
+  loadSkills();
+}
+
+async function deleteSkill(id) {
+  await supabase
+    .from("skills")
+    .delete()
+    .eq("id", id);
+
+  loadSkills();
+}
+
+window.logout = logout;
+window.saveAbout = saveAbout;
+window.uploadProfileImage = uploadProfileImage;
+window.addSkill = addSkill;
+window.deleteSkill = deleteSkill;
+
+document.addEventListener(
+  "DOMContentLoaded",
+  async () => {
+    await checkAuth();
+    await loadSettings();
+    await loadSkills();
+  }
+);
+</script>
+
+</body>
+</html>
